@@ -167,7 +167,7 @@ o.sessions.forEach(x=>{x.user=u;const i=S.sessions.findIndex(y=>y.id===x.id);if(
 S.msg='✓ Importado: '+o.sessions.length+' sesiones de '+u;S.sy='';S.pm=0}catch(e){S.msg='Código no válido'}}
 const syncCard=()=>`<div class="card"><b>${CL} Nube y vínculos</b>${typeof invIn!=='undefined'&&invIn.length?'<p class="muted" style="margin:4px 0">Tienes '+invIn.length+' invitación(es) pendiente(s).</p>':'<p class="muted" style="margin:4px 0 8px">Inicia sesión con Google para guardar tus datos en la nube e invitar o vincular a tu entrenador o alumnos.</p>'}<button class="pri" data-live>Abrir cuenta</button></div>`;
 function roleView(){return`<h1 style="margin-top:30px">Trazik <b>Fit</b></h1><p class="muted">¿Cómo vas a usar la app?</p>
-<div class="card"><b>Entrenador</b><p class="muted">Ve y organiza a todos tus atletas: planes, calendarios, progreso y comentarios de cada sesión. No necesitas iniciar sesión con Google; la cuenta solo sirve para sincronizar en la nube e invitar alumnos.</p><button class="pri" data-rl="coach">Entrar como entrenador</button>${typeof roleErr!=='undefined'&&roleErr?`<p style="color:#e58a8a;margin:8px 0 0">${esc(roleErr)}</p>`:''}</div>
+<div class="card"><b>Entrenador</b><p class="muted">Ve y organiza a todos tus atletas: planes, calendarios, progreso y comentarios de cada sesión.</p><button class="pri" data-rl="coach">Entrar como entrenador</button>${typeof roleErr!=='undefined'&&roleErr?`<p style="color:#e58a8a;margin:8px 0 0">${esc(roleErr)}</p>`:''}</div>
 <div class="card"><b>Atleta</b><p class="muted">Ve solo tu propio programa y tus sesiones.</p><input class="in" id="rn" placeholder="Tu nombre (igual al que usa tu entrenador)"><button class="pri" style="margin-top:8px" data-rl="atleta">Entrar como atleta</button></div>
 <p class="muted">Los datos se guardan automáticamente en este navegador.</p><button data-live>${CL} Iniciar sesión / Cuenta</button>`}
 function teamView(){const m=mon(new Date()),w0=iso(m),w1=iso(add(m,6)),p0=iso(add(m,-7)),p1=iso(add(m,-1)),ar=(c,p)=>!p&&!c?'':`<small class="${c>=p?'up':'dn'}">${c>=p?'▲':'▼'} ${p?Math.abs((c-p)/p*100).toFixed(0)+'%':'nuevo'}</small>`;
@@ -235,7 +235,7 @@ if(S.view==='month'){const f=new Date(A.getFullYear(),A.getMonth(),1),l=new Date
 while(m<=l){labels.push('S'+i++);vals.push(val(on(L,iso(m),iso(add(m,6))),S.metric));m=add(m,7)}return{label:MN[A.getMonth()]+' '+A.getFullYear(),labels,vals}}
 const h=A.getMonth()<6?0:6,y=A.getFullYear();const labels=[],vals=[];for(let k=0;k<6;k++){const f=new Date(y,h+k,1),l=new Date(y,h+k+1,0);labels.push(MN[h+k]);vals.push(val(on(L,iso(f),iso(l)),S.metric))}
 return{label:`${h?'2.º':'1.er'} semestre ${y}`,labels,vals}}
-function render(){if(!S.role){document.getElementById('app').innerHTML=roleView();return}const V={team:teamView,plan:S.role==='atleta'?athProg:planView,prog:progView,pr:prView}[S.view];if(V){document.getElementById('app').innerHTML=hd()+V();return}const P=period(),A=pd(S.anchor);
+function render(){if(!S.role){document.getElementById('app').innerHTML=roleView();return}if(S.role==='coach'&&!isCoach(me)){document.getElementById('app').innerHTML='<p class="muted" style="margin-top:40px">Verificando acceso de entrenador…</p>';return}const V={team:teamView,plan:S.role==='atleta'?athProg:planView,prog:progView,pr:prView}[S.view];if(V){document.getElementById('app').innerHTML=hd()+V();return}const P=period(),A=pd(S.anchor);
 let h=`<h1>Trazik <b>Fit</b></h1>${users()}<div class="row"><span class="chip on">${IC} Entrenamiento</span></div>
 <div class="bnav">${tabs().map(([k,n])=>`<button class="tab ${S.view===k?'on':''}" data-v="${k}">${n}</button>`).join('')}</div>
 <div class="row nav"><button data-n="-1">‹</button><strong>${P.label}</strong><button data-n="1">›</button></div>`;
@@ -321,10 +321,16 @@ const errTxt=e=>e.code==='auth/unauthorized-domain'?'Este dominio no está autor
 const fixS=()=>{ensIds();if(!S.users.length)S.users=['vale'];if(!S.users.includes(S.user))S.user=S.users[0];if(!S.plans[S.user])S.plans[S.user]=[];if(!S.plans[S.user][S.pm])S.pm=0};
 const isCoach=u=>!!(u&&u.emailVerified&&String(u.email||'').toLowerCase()===EMAIL_ENTRENADOR.toLowerCase());
 let roleErr='';const ciGet=()=>{try{return sessionStorage.getItem('ci')==='1'}catch(e){return false}},ciSet=v=>{try{v?sessionStorage.setItem('ci','1'):sessionStorage.removeItem('ci')}catch(e){}};
-function coachEntry(){roleErr='';S.role='coach';S.view='team';save()}
-function gateRole(){ciSet(false);render()}
+function coachEntry(){roleErr='';if(!CFG_OK){roleErr='El acceso de Entrenador requiere iniciar sesión con Google (falta configurar Firebase).';return}
+if(me){if(isCoach(me)){S.role='coach';S.view='team'}else roleErr='Acceso denegado: la cuenta '+me.email+' no está autorizada como Entrenador. Entra como Atleta.';return}
+login(true)}
+function gateRole(){if(!me){if(S.role==='coach'){S.role='';save()}render();return}const ci=ciGet();ciSet(false);
+if(isCoach(me)){if(ci){S.role='coach';S.view='team';roleErr='';save()}render();return}
+if(S.role==='coach'){S.role='';roleErr='Esta cuenta no está autorizada como Entrenador.';save()}
+if(ci){roleErr='Acceso denegado: la cuenta '+(me.email||'')+' no está autorizada como Entrenador. Entra como Atleta o usa otra cuenta.';try{auth.signOut()}catch(e){}}
+render()}
 function teardown(){unsubs.forEach(f=>{try{f()}catch(e){}});Object.values(stu).forEach(f=>{try{f()}catch(e){}});unsubs=[];stu={};synced={};lastMeta='';lastC={};ready=false;myDoc={};invIn=[];invOut=[]}
-function initCloud(){if(!CFG_OK){render();return}firebase.initializeApp(FIREBASE_CONFIG);auth=firebase.auth();db=firebase.firestore();
+function initCloud(){if(!CFG_OK){if(S.role==='coach'){S.role='';save()}render();return}firebase.initializeApp(FIREBASE_CONFIG);auth=firebase.auth();db=firebase.firestore();
 auth.getRedirectResult().catch(e=>{cmsg=errTxt(e);renderCloud()});
 auth.onAuthStateChanged(u=>{teardown();me=u;if(u)startCloud(u);gateRole();renderCloud()})}
 async function startCloud(u){try{const ref=db.collection('users').doc(u.uid),d=await ref.get();
